@@ -1,0 +1,3 @@
+ordered_chain_filenames: 
+# eg. For Namecheap
+# ordered_chain_filenames: [PositiveSSLCA.crt, UTNAddTrustServerCA.crt, AddTrustExternalCARoot.crt]

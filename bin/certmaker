@@ -1,0 +1,339 @@
+#!/usr/bin/env ruby
+
+require 'rubygems'
+require 'fileutils'
+require 'yaml'
+require 'getoptlong'
+
+PROGRAM_NAME = 'certmaker'
+
+opts = GetoptLong.new(
+    [ "--certfilename",  "-c",   GetoptLong::OPTIONAL_ARGUMENT ],
+    [ "--usage",         "-u",   GetoptLong::NO_ARGUMENT ],
+    [ "--version",       "-v",   GetoptLong::NO_ARGUMENT ]
+)
+
+def latest_documentation_info
+  "Please see https://github.com/theirishpenguin/certmaker\n" +
+  "for the latest instructions."
+end
+
+begin
+    opts.each do |opt, arg|
+        case opt
+            when "--certfilename"
+                 @certfilename = arg
+            when "--usage"
+                 puts "certmake command SUB_DOMAIN [--certfilename=foo.crt]\n\n" +
+                    latest_documentation_info
+                 exit 0
+            when "--version"
+                 puts "certmake v0.0.1"
+                 exit 0
+        end
+    end
+
+rescue
+    raise # TODO: Handle errors
+end
+
+@exe_filepath = File.expand_path(__FILE__)
+@command = ARGV[0]
+
+@commands = ['create', 'unpack_namecheap', 'combine_key', 'remove_passphrases', 'append_chain', 'check_chain', 'upload_to_heroku', 'heroku_wizard'] # 'assemble_chain'
+
+unless @commands.include? @command
+  puts "
+You tried to run an invalid command (#{@command}). Valid commands are:
+
+#{@commands.map{|com| "  #{PROGRAM_NAME} #{com}"}.join("\n")}
+
+#{latest_documentation_info}
+"
+  exit 1
+end
+
+@common_name = ARGV[1]
+
+if @common_name.to_s.empty?
+  puts "Please supply the exact URL you wish to generate the a cert for as a parameter"
+  exit 1
+end
+
+def underscored_name
+  @common_name.gsub('.') {'_'}
+end
+
+def init
+  @dot_dir = "#{ENV['HOME']}/.certmaker"
+  @certificates_dir = "#{@dot_dir}/certs"
+  FileUtils.mkdir_p @certificates_dir
+ 
+  @cert_dir = "#{@certificates_dir}/#{underscored_name}_ssl"
+  FileUtils.mkdir_p @cert_dir
+  FileUtils.cd @cert_dir
+
+  @config_filepath = "#{@cert_dir}/config.yml"
+end
+
+def load_config
+  if File.exist? @config_filepath
+    @config = YAML::load(File.open(@config_filepath))
+  else
+    puts "
+Please create a config file at
+#{@config_filepath}
+
+Here is a sample:
+
+#{sample_config_text}
+    "
+    exit 1
+  end
+end
+
+def sample_config_filepath
+  "#{File.dirname(@exe_filepath)}/../samples/config.yml"
+end
+
+def sample_config_text
+
+"
+# START OF CONFIG FILE
+# ---------------------------------------
+#{File.read(sample_config_filepath).chomp}
+# ---------------------------------------
+# END OF CONFIG FILE
+"
+end
+
+def create_wip_dirs
+  # Each directory is a sequential step in the obtaining of the cert
+  # Note: All directories are important, arguably dir 1 is the most important
+  # as it contains your private key (never lose this!)
+  @dir1 ="#{@cert_dir}/1_my_key_and_csr"
+  @dir2 = "#{@cert_dir}/2_ssl_provider_artifacts"
+  @dir2_zips = "#{@dir2}/zips"
+  @dir3 = "#{@cert_dir}/3_key_cert_combo"
+  @dir4 = "#{@cert_dir}/4_key_cert_nopass"
+  @dir5 = "#{@cert_dir}/5_key_cert_no_pass_chained"
+
+  [@dir1, @dir2_zips, @dir3, @dir4, @dir5].each do |dir|
+    FileUtils.mkdir_p  dir
+  end
+
+end
+
+def private_key_filepath
+  "#{@dir1}/#{@common_name}.key"
+end
+
+def private_key_nopass_filepath
+  "#{@dir4}/#{@common_name}.nopass.key"
+end
+
+def csr_filepath
+  "#{@dir1}/#{@common_name}.csr"
+end
+
+def crt_filepath
+  if @certfilename
+    "#{@dir2}/#{@certfilename}"
+  else
+    "#{@dir2}/#{underscored_name}.crt"
+  end
+end
+
+def key_cert_combo_filepath
+  "#{@dir3}/#{underscored_name}.pem"
+end
+
+def key_cert_combo_nopass_filepath
+  "#{@dir4}/#{underscored_name}.nopass.pem"
+end
+
+def key_cert_combo_nopass_chained_filepath
+  "#{@dir5}/#{underscored_name}_chained.nopass.pem"
+end
+
+def generate_private_key
+  `openssl genrsa -out #{private_key_filepath} 2048`
+end
+
+def generate_csr
+  `openssl req -new -key #{private_key_filepath} -out #{csr_filepath}`
+end
+
+def display_csr_instructions
+  puts "
+Here's an example of values for your csr when asked.
+
+  NB: Don't create a challenge passphrase or any other optional
+  fields when asked.
+
+  Country Name (2 letter code) [AU]:IE
+  State or Province Name (full name) [Some-State]:Leinster
+  Locality Name (eg, city) []:Dublin
+  Organization Name (eg, company) [Internet Widgits Pty Ltd]:EXAMPLE CORP LIMITED
+  Organizational Unit Name (eg, section) []:Engineering
+  Common Name (eg, YOUR name) []:www.example.com
+  Email Address []:support@example.com
+
+"
+end
+
+def create
+  generate_private_key
+  display_csr_instructions
+  generate_csr
+  display_make_summary
+end
+
+def continue_prompt
+  puts 'Press any key to continue or Ctrl-C to exit.'
+  dummy = STDIN.gets.chomp
+end
+
+
+def display_make_summary
+  puts "
+A private key (.key file) and a CSR (.csr file) has been generated for you.
+
+The private key file is at
+#{private_key_filepath}
+
+You need to keep the private key safe, as you cannot recover from losing it.
+
+You will now use the CSR to create your certificate, which is at
+#{csr_filepath}
+
+Visit your SSL retailers website and request, renew or reissue a SSL certificate.
+
+You will be asked for a CSR key when applying for a cert. Copy and paste the contents of the CSR file into the SSL cert application form.
+
+Notes on applying for an SSL cert
+* If you are asked to specify your webserver type and you are not sure what to say you can usually choose the most general option available (eg. other).
+* Your SSL Cert retailer will ask you to verify domain ownership of #{@common_name}
+* Your SSL Cert retailer will finally issue you the SSL certs
+* The certs make come in a zip file(s). Files with'_pkcs7' in the name are for Windows servers
+* Often, intermediate cert chains are provided as an extra with your cert. They need to be installed with your cert. The actual cert itself is usual the file with your domain name in it
+
+If you receive zip files of certs, you can download them to #{@dir2_zips} and run the command:
+
+  #{PROGRAM_NAME} unpack_namecheap #{@common_name}
+
+If your certs don't come in a zip file or your prefer to extract them manually before continuing, then you can download them to #{@dir2}
+
+Once unpacked, you now have obtained your certs. Next up you can do any of the following as needed
+
+  #{PROGRAM_NAME} heroku_wizard #{@common_name}
+  #{PROGRAM_NAME} combine_key #{@common_name}
+  #{PROGRAM_NAME} remove_passphrases #{@common_name}
+  #{PROGRAM_NAME} append_chain #{@common_name}
+  #{PROGRAM_NAME} check_chain #{@common_name}
+  #{PROGRAM_NAME} upload_to_heroku #{@common_name}
+
+"
+end
+
+def unpack_namecheap
+  # Pre-requisite
+  if `which unzip`.length == 0
+    puts "Please first install unzip (eg. on Ubuntu use 'sudo apt-get install unzip')"
+    exit 1
+  end
+
+  FileUtils.cd @dir2
+  `unzip -j zips/#{underscored_name}.zip`
+end
+
+
+def combine_private_key_and_cert
+  instruct "Combining your private key with your combined cert"
+
+  `cat #{crt_filepath} #{private_key_filepath} > #{key_cert_combo_filepath}`
+end
+
+def remove_passphrases
+  instruct "Removing passphrase"
+
+  puts `openssl rsa -in #{key_cert_combo_filepath} -out #{key_cert_combo_nopass_filepath}`
+
+  puts `openssl x509 -in #{key_cert_combo_filepath} >> #{key_cert_combo_nopass_filepath}`
+
+  puts `openssl rsa -in #{private_key_filepath} -out #{private_key_nopass_filepath}`
+end
+
+def chain_files_in_order
+  @config['ordered_chain_filenames'].map{ |filename|
+    "#{@dir2}/#{filename}"
+  }.join(' ')
+end
+
+def append_chain
+  instruct "Appending intermediate chain to cert"
+
+  `cat #{key_cert_combo_nopass_filepath} #{chain_files_in_order} > #{key_cert_combo_nopass_chained_filepath}`
+end
+
+def check_chain
+
+  # Pre-requisite
+  if `which perl`.length == 0
+    puts "Please install perl."
+    exit 1
+  end
+
+  instruct "Checking chain. The issuer of the first should be the subject of the second. And so on. Is that how the following output looks"
+
+  puts `perl -n0777e 'map { print "---\n"; open(CMD, "| openssl x509 -noout -subject -issuer"); print CMD; close(CMD) } /^-----BEGIN.*?^-----END.*?\n/gsm' #{key_cert_combo_nopass_chained_filepath}`
+end
+
+def upload_to_heroku
+
+  puts "What is your heroku app name?"
+  app_name = STDIN.gets.chomp
+
+  cmd = "heroku ssl:add #{key_cert_combo_nopass_chained_filepath} #{private_key_nopass_filepath} --app #{app_name}"
+
+puts "
+If you want to upload the key certificate to heroku for your app, this will run the command
+
+  #{cmd}
+
+"
+
+  continue_prompt
+
+  puts `#{cmd}`
+end
+
+def instruct(instruction)
+   puts "\n#{instruction}...\n"
+end
+
+init
+load_config
+create_wip_dirs
+case @command
+when 'create'
+  create
+when 'unpack_namecheap'
+  unpack_namecheap
+when 'combine_key'
+  combine_private_key_and_cert
+when 'remove_passphrases'
+  remove_passphrases
+when 'heroku_wizard'
+  combine_private_key_and_cert
+  remove_passphrases
+  append_chain
+  upload_to_heroku
+when 'append_chain'
+  append_chain
+when 'check_chain'
+  check_chain
+when 'upload_to_heroku'
+  upload_to_heroku
+end
+
