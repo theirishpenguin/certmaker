@@ -58,6 +58,9 @@ The 2_ssl_provider_artifacts directory is used to store the cert and other bits 
 
 The 3_key_cert_combo is used to store files that combine a private key and a cert. The 4_key_cert_nopass directory transforms the contents of the previous directory so that any password has been remove from the files. This is often required so that cloud servers can automatically restart your app without needing to supply a password. Finally the 5_key_cert_no_pass_chained transforms the files a little more - ultimately it contains the final version of the cert by adding the intermediate chain. So by this stage we should have our SSL cert (with the key combined, any passwords removed and the intermediate chain added). Phew!
 
+###Issues
+Please log any issues at https://github.com/theirishpenguin/certmaker/issues
+
 ###Credits
 Thanks to the following resources which laid the the foundation for this gem
 * [Generating and adding a cert to Heroku](http://blog.dynamic50.com/2011/02/15/ssl-on-wildcard-domains-on-heroku-using-godaddy/)
