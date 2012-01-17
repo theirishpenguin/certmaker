@@ -297,9 +297,15 @@ def upload_to_heroku
   cmd = "heroku ssl:add #{key_cert_combo_nopass_chained_filepath} #{private_key_nopass_filepath} --app #{app_name}"
 
 puts "
+Please ensure that you have a Custom Domain for #{@common_name} setup on your Heroku app before continuing.
+
 If you want to upload the key certificate to heroku for your app, this will run the command
 
   #{cmd}
+
+If anything goes wrong at this stage you can simply run the following command to retry later
+
+  #{PROGRAM_NAME} upload_to_heroku #{@common_name}
 
 "
 

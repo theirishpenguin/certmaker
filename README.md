@@ -17,7 +17,7 @@ For some platforms the cert you receive from your SSL Certificate provider is al
 
 For other platforms (eg. heroku) you need to do a little more, such as combining together your key, certifice, intermediate cert chain as well as removing passwords.
 
-For heroku you just save the SSL cert zip in designated directory and run the commands...
+For heroku you just save the SSL cert zip (eg. ~/.certmaker/certs/your_domain_com_ssl/2_ssl_provider_artifacts/zips ) in designated directory and run the commands...
 
     certmaker unpack_namecheap your.secure.domain
     certmaker heroku_wizard your.secure.domain
