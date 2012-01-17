@@ -40,7 +40,7 @@ end
 @exe_filepath = File.expand_path(__FILE__)
 @command = ARGV[0]
 
-@commands = ['create', 'unpack_namecheap', 'combine_key', 'remove_passphrases', 'append_chain', 'check_chain', 'upload_to_heroku', 'heroku_wizard'] # 'assemble_chain'
+@commands = ['create', 'unpack_namecheap', 'remove_passphrases', 'append_chain', 'check_chain', 'upload_to_heroku', 'heroku_wizard'] # 'assemble_chain'
 
 unless @commands.include? @command
   puts "
@@ -114,11 +114,10 @@ def create_wip_dirs
   @dir1 ="#{@cert_dir}/1_my_key_and_csr"
   @dir2 = "#{@cert_dir}/2_ssl_provider_artifacts"
   @dir2_zips = "#{@dir2}/zips"
-  @dir3 = "#{@cert_dir}/3_key_cert_combo"
-  @dir4 = "#{@cert_dir}/4_key_cert_nopass"
-  @dir5 = "#{@cert_dir}/5_key_cert_no_pass_chained"
+  @dir3 = "#{@cert_dir}/3_key_and_cert_nopass"
+  @dir4 = "#{@cert_dir}/4_key_and_cert_nopass_chained"
 
-  [@dir1, @dir2_zips, @dir3, @dir4, @dir5].each do |dir|
+  [@dir1, @dir2_zips, @dir3, @dir4].each do |dir|
     FileUtils.mkdir_p  dir
   end
 
@@ -129,7 +128,7 @@ def private_key_filepath
 end
 
 def private_key_nopass_filepath
-  "#{@dir4}/#{@common_name}.nopass.key"
+  "#{@dir3}/#{@common_name}.nopass.key"
 end
 
 def csr_filepath
@@ -144,16 +143,12 @@ def crt_filepath
   end
 end
 
-def key_cert_combo_filepath
-  "#{@dir3}/#{underscored_name}.pem"
+def cert_nopass_filepath
+  "#{@dir3}/#{underscored_name}.nopass.pem"
 end
 
-def key_cert_combo_nopass_filepath
-  "#{@dir4}/#{underscored_name}.nopass.pem"
-end
-
-def key_cert_combo_nopass_chained_filepath
-  "#{@dir5}/#{underscored_name}_chained.nopass.pem"
+def cert_nopass_chained_filepath
+  "#{@dir4}/#{underscored_name}_chained.nopass.pem"
 end
 
 def generate_private_key
@@ -227,7 +222,6 @@ If your certs don't come in a zip file or your prefer to extract them manually b
 Once unpacked, you now have obtained your certs. Next up you can do any of the following as needed
 
   #{PROGRAM_NAME} heroku_wizard #{@common_name}
-  #{PROGRAM_NAME} combine_key #{@common_name}
   #{PROGRAM_NAME} remove_passphrases #{@common_name}
   #{PROGRAM_NAME} append_chain #{@common_name}
   #{PROGRAM_NAME} check_chain #{@common_name}
@@ -248,18 +242,12 @@ def unpack_namecheap
 end
 
 
-def combine_private_key_and_cert
-  instruct "Combining your private key with your combined cert"
-
-  `cat #{crt_filepath} #{private_key_filepath} > #{key_cert_combo_filepath}`
-end
-
 def remove_passphrases
   instruct "Removing passphrase"
 
-  puts `openssl rsa -in #{key_cert_combo_filepath} -out #{key_cert_combo_nopass_filepath}`
+  puts `openssl rsa -in #{crt_filepath} -out #{cert_nopass_filepath}`
 
-  puts `openssl x509 -in #{key_cert_combo_filepath} >> #{key_cert_combo_nopass_filepath}`
+  puts `openssl x509 -in #{crt_filepath} >> #{cert_nopass_filepath}`
 
   puts `openssl rsa -in #{private_key_filepath} -out #{private_key_nopass_filepath}`
 end
@@ -273,7 +261,7 @@ end
 def append_chain
   instruct "Appending intermediate chain to cert"
 
-  `cat #{key_cert_combo_nopass_filepath} #{chain_files_in_order} > #{key_cert_combo_nopass_chained_filepath}`
+  `cat #{cert_nopass_filepath} #{chain_files_in_order} > #{cert_nopass_chained_filepath}`
 end
 
 def check_chain
@@ -286,7 +274,7 @@ def check_chain
 
   instruct "Checking chain. The issuer of the first should be the subject of the second. And so on. Is that how the following output looks"
 
-  puts `perl -n0777e 'map { print "---\n"; open(CMD, "| openssl x509 -noout -subject -issuer"); print CMD; close(CMD) } /^-----BEGIN.*?^-----END.*?\n/gsm' #{key_cert_combo_nopass_chained_filepath}`
+  puts `perl -n0777e 'map { print "---\n"; open(CMD, "| openssl x509 -noout -subject -issuer"); print CMD; close(CMD) } /^-----BEGIN.*?^-----END.*?\n/gsm' #{cert_nopass_chained_filepath}`
 end
 
 def upload_to_heroku
@@ -294,7 +282,7 @@ def upload_to_heroku
   puts "What is your heroku app name?"
   app_name = STDIN.gets.chomp
 
-  cmd = "heroku ssl:add #{key_cert_combo_nopass_chained_filepath} #{private_key_nopass_filepath} --app #{app_name}"
+  cmd = "heroku ssl:add #{cert_nopass_chained_filepath} #{private_key_nopass_filepath} --app #{app_name}"
 
 puts "
 Please ensure that you have a Custom Domain for #{@common_name} setup on your Heroku app before continuing.
@@ -326,12 +314,9 @@ when 'create'
   create
 when 'unpack_namecheap'
   unpack_namecheap
-when 'combine_key'
-  combine_private_key_and_cert
 when 'remove_passphrases'
   remove_passphrases
 when 'heroku_wizard'
-  combine_private_key_and_cert
   remove_passphrases
   append_chain
   upload_to_heroku
