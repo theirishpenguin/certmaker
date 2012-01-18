@@ -9,7 +9,7 @@ This project is at an early stage. It is 100% usable for people who use Namechea
 ### Usage
 The typical usage is to create a private key locally and a CSR
 
-    certmaker create your.secure.domain
+    certmaker create www.example.com
 
 You then keep the private key safe and use the CSR to request an SSL cert from your SSL Certificate provider
 
@@ -17,21 +17,20 @@ For some platforms the cert you receive from your SSL Certificate provider is al
 
 For other platforms (eg. heroku) you need to do a little more, such as combining together your key, certifice, intermediate cert chain as well as removing passwords.
 
-For heroku you just save the SSL cert zip (eg. ~/.certmaker/certs/your_domain_com_ssl/2_ssl_provider_artifacts/zips ) in designated directory and run the commands...
+For Namecheap Comodo PositiveSSL certs with heroku you just save the SSL cert zip in SSL provider artifact directory (eg. ~/.certmaker/certs/www_example_com_ssl/2_ssl_provider_artifacts/zips ) and run the commands...
 
-    certmaker unpack_namecheap your.secure.domain
-    certmaker heroku_wizard your.secure.domain
+    certmaker unpack_namecheap www.example.com
+    certmaker heroku_wizard www.example.com
 
 ... to do all that is necessary (currently we only can vouch for this process working with namecheap.com Comodo PositiveSSL certs as it all we have tested with). This will do the necessary transformations and then prompt you to upload the finished SSL cert to your heroku app.
 
 We also provide the following commands
 
-    certmaker unpack_namecheap your.secure.domain
-    certmaker combine_key your.secure.domain # can take an optional --certfilename parameter
-    certmaker remove_passphrases your.secure.domain
-    certmaker append_chain your.secure.domain
-    certmaker check_chain your.secure.domain
-    certmaker upload_to_heroku your.secure.domain
+    certmaker unpack_namecheap www.example.com
+    certmaker remove_passphrases www.example.com
+    certmaker append_chain www.example.com
+    certmaker check_chain www.example.com
+    certmaker upload_to_heroku www.example.com
 
 All your keys, certs and other details are stored under a .certmaker directory in your home directory. You need to have a little understanding of the directory stucture to know where to find things. Each cert you generate will live in its own directory under .certmaker/certs/
 
@@ -39,24 +38,23 @@ For example...
 
     /home/user/.certmaker/
     `-- certs
-      `-- www_sample_com_ssl
+      `-- www_example_com_ssl
           |-- 1_my_key_and_csr
-          |   |-- www.sample.com.csr
-          |   `-- www.sample.com.key
+          |   |-- www.example.com.csr
+          |   `-- www.example.com.key
           |-- 2_ssl_provider_artifacts
           |   `-- zips
-          |-- 3_key_cert_combo
-          |-- 4_key_cert_nopass
-          |-- 5_key_cert_no_pass_chained
+          |-- 3_key_and_cert_nopass
+          |-- 4_key_and_cert_nopass_chained
           `-- config.yml
 
 ... your private key and CSR will be under 1_my_key_and_csr
 
-Note: The first time you run a command such as 'certmaker create your.secure.domain' for a new subdomain you will be prompted to create a config.yml file under the individual cert directory. Currently this config file is only used to supply the 'ordered_chain_filenames' setting. This allows you to define the order in which intermediate certs are chained together (yes, this all does sound unnecessarily confusing!).
+Note: The first time you run a command such as 'certmaker create www.example.com' for a new subdomain you will be prompted to create a config.yml file under the individual cert directory. Currently this config file is only used to supply the 'ordered_chain_filenames' setting. This allows you to define the order in which intermediate certs are chained together (yes, this all does sound unnecessarily confusing!).
 
 The 2_ssl_provider_artifacts directory is used to store the cert and other bits send on by your SSL certificate provider after you have successfully applied for a cert (zip files should be stored in the zips folder).
 
-The 3_key_cert_combo is used to store files that combine a private key and a cert. The 4_key_cert_nopass directory transforms the contents of the previous directory so that any password has been remove from the files. This is often required so that cloud servers can automatically restart your app without needing to supply a password. Finally the 5_key_cert_no_pass_chained transforms the files a little more - ultimately it contains the final version of the cert by adding the intermediate chain. So by this stage we should have our SSL cert (with the key combined, any passwords removed and the intermediate chain added). Phew!
+The 3_key_cert_nopass directory contains a copy of your private key and your ssl cert of with any passwords removed in case you had supplied any. This is often required so that cloud servers can automatically restart your app without needing to supply a password. Finally the 4_key_and_cert_nopass_chained transforms the files a little more - ultimately it contains the final version of the cert by adding the intermediate chain. So by this stage we should have our SSL cert (with any passwords removed and the intermediate chain added). Phew!
 
 ###Issues
 Please log any issues at https://github.com/theirishpenguin/certmaker/issues

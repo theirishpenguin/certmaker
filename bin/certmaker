@@ -87,6 +87,9 @@ Please create a config file at
 Here is a sample:
 
 #{sample_config_text}
+
+Then rerun this command: #{PROGRAM_NAME} create #{@common_name}
+
     "
     exit 1
   end
@@ -178,6 +181,7 @@ Here's an example of values for your csr when asked.
 end
 
 def create
+  warn_if_private_key_already_exists
   generate_private_key
   display_csr_instructions
   generate_csr
@@ -189,9 +193,28 @@ def continue_prompt
   dummy = STDIN.gets.chomp
 end
 
+def warn_if_private_key_already_exists
+  if File.exist?(private_key_filepath)
+    puts "
+
+WARNING: A private key already for this domain at:
+
+  #{private_key_filepath}
+
+Continuing will destroy this private key, which cannot be recovered unless
+you have a backup of it. Are you sure you wish to continue?
+
+"
+    continue_prompt
+  end
+end
 
 def display_make_summary
   puts "
+
+
+###############################################################################
+
 A private key (.key file) and a CSR (.csr file) has been generated for you.
 
 The private key file is at
