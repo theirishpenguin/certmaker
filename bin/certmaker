@@ -24,11 +24,11 @@ begin
             when "--certfilename"
                  @certfilename = arg
             when "--usage"
-                 puts "certmake command SUB_DOMAIN [--certfilename=foo.crt]\n\n" +
+                 puts "certmaker command SUB_DOMAIN [--certfilename=foo.crt]\n\n" +
                     latest_documentation_info
                  exit 0
             when "--version"
-                 puts "certmake v0.0.1"
+                 puts "certmaker v0.0.3"
                  exit 0
         end
     end
