@@ -266,9 +266,10 @@ end
 
 
 def remove_passphrases
-  instruct "Removing passphrase"
+  instruct "Removing passphrase (if any)"
 
-  puts `openssl rsa -in #{crt_filepath} -out #{cert_nopass_filepath}`
+  # Suppress error output, private key may not exist
+  puts `openssl rsa -in #{crt_filepath} -out #{cert_nopass_filepath} 2> /dev/null`
 
   puts `openssl x509 -in #{crt_filepath} >> #{cert_nopass_filepath}`
 
