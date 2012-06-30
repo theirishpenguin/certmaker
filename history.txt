@@ -1,5 +1,9 @@
 History
 -------
+v0.0.5 Small update to continuation message in heroku wizard
+
+v0.0.4 Kept up to data with the comodo positivessl intermediate chain
+
 v0.0.3 Fixed -v option of certmaker reporting the wrong version of the gem.
 
 v0.0.2 Fixed issue #1 and bumped gemspec version number.
