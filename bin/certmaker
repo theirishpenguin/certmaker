@@ -322,6 +322,7 @@ If anything goes wrong at this stage you can simply run the following command to
 "
 
   continue_prompt
+  puts 'Okay. Trying to upload cert to heroku...'
 
   puts `#{cmd}`
 end
