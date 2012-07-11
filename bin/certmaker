@@ -28,7 +28,7 @@ begin
                     latest_documentation_info
                  exit 0
             when "--version"
-                 puts "certmaker v0.0.5"
+                 puts "certmaker v0.0.6"
                  exit 0
         end
     end
@@ -40,7 +40,7 @@ end
 @exe_filepath = File.expand_path(__FILE__)
 @command = ARGV[0]
 
-@commands = ['create', 'unpack_namecheap', 'remove_passphrases', 'append_chain', 'check_chain', 'upload_to_heroku', 'heroku_wizard'] # 'assemble_chain'
+@commands = ['create', 'unpack_namecheap', 'append_chain', 'check_chain', 'upload_to_heroku', 'heroku_wizard'] # 'assemble_chain'
 
 unless @commands.include? @command
   puts "
@@ -117,10 +117,9 @@ def create_wip_dirs
   @dir1 ="#{@cert_dir}/1_my_key_and_csr"
   @dir2 = "#{@cert_dir}/2_ssl_provider_artifacts"
   @dir2_zips = "#{@dir2}/zips"
-  @dir3 = "#{@cert_dir}/3_key_and_cert_nopass"
-  @dir4 = "#{@cert_dir}/4_key_and_cert_nopass_chained"
+  @dir3 = "#{@cert_dir}/3_key_and_cert_chained"
 
-  [@dir1, @dir2_zips, @dir3, @dir4].each do |dir|
+  [@dir1, @dir2_zips, @dir3].each do |dir|
     FileUtils.mkdir_p  dir
   end
 
@@ -128,10 +127,6 @@ end
 
 def private_key_filepath
   "#{@dir1}/#{@common_name}.key"
-end
-
-def private_key_nopass_filepath
-  "#{@dir3}/#{@common_name}.nopass.key"
 end
 
 def csr_filepath
@@ -146,12 +141,8 @@ def crt_filepath
   end
 end
 
-def cert_nopass_filepath
-  "#{@dir3}/#{underscored_name}.nopass.pem"
-end
-
-def cert_nopass_chained_filepath
-  "#{@dir4}/#{underscored_name}_chained.nopass.pem"
+def cert_chained_filepath
+  "#{@dir3}/#{underscored_name}_chained.pem"
 end
 
 def generate_private_key
@@ -245,7 +236,6 @@ If your certs don't come in a zip file or your prefer to extract them manually b
 Once unpacked, you now have obtained your certs. Next up you can do any of the following as needed
 
   #{PROGRAM_NAME} heroku_wizard #{@common_name}
-  #{PROGRAM_NAME} remove_passphrases #{@common_name}
   #{PROGRAM_NAME} append_chain #{@common_name}
   #{PROGRAM_NAME} check_chain #{@common_name}
   #{PROGRAM_NAME} upload_to_heroku #{@common_name}
@@ -265,17 +255,6 @@ def unpack_namecheap
 end
 
 
-def remove_passphrases
-  instruct "Removing passphrase (if any)"
-
-  # Suppress error output, private key may not exist
-  puts `openssl rsa -in #{crt_filepath} -out #{cert_nopass_filepath} 2> /dev/null`
-
-  puts `openssl x509 -in #{crt_filepath} >> #{cert_nopass_filepath}`
-
-  puts `openssl rsa -in #{private_key_filepath} -out #{private_key_nopass_filepath}`
-end
-
 def chain_files_in_order
   @config['ordered_chain_filenames'].map{ |filename|
     "#{@dir2}/#{filename}"
@@ -285,7 +264,7 @@ end
 def append_chain
   instruct "Appending intermediate chain to cert"
 
-  `cat #{cert_nopass_filepath} #{chain_files_in_order} > #{cert_nopass_chained_filepath}`
+  `cat #{crt_filepath} #{chain_files_in_order} > #{cert_chained_filepath}`
 end
 
 def check_chain
@@ -296,9 +275,11 @@ def check_chain
     exit 1
   end
 
-  instruct "Checking chain. The issuer of the first should be the subject of the second. And so on. Is that how the following output looks"
+  instruct "Checking chain. The issuer of the first should be the subject of the second. And so on. Is that how the following output looks...
 
-  puts `perl -n0777e 'map { print "---\n"; open(CMD, "| openssl x509 -noout -subject -issuer"); print CMD; close(CMD) } /^-----BEGIN.*?^-----END.*?\n/gsm' #{cert_nopass_chained_filepath}`
+"
+
+  puts `perl -n0777e 'map { print "---\n"; open(CMD, "| openssl x509 -noout -subject -issuer"); print CMD; close(CMD) } /^-----BEGIN.*?^-----END.*?\n/gsm' #{cert_chained_filepath}`
 end
 
 def upload_to_heroku
@@ -309,7 +290,11 @@ def upload_to_heroku
   cmd = "heroku addons:add ssl:endpoint --app #{app_name}"
 
   puts "
-Now, we will add the SSL addon to your app (#{app_name}) on heroku in case you have not already done so. If you have already added the SSL addon, then you it will simply let you know.
+You should read the heroku ssl guide before continuing at...
+
+https://devcenter.heroku.com/articles/ssl-endpoint
+
+Now, we will add the SSL addon to your app (#{app_name}) on heroku in case you have not already done so.
 
 This will run the command
 
@@ -322,10 +307,15 @@ This will run the command
 "
 
   puts `#{cmd}`
+  puts "
+Please note, if the last step failed because you have already have the heroku SSL addon installed, then that is okay. You can continue.
 
-  exit 1 if $?.exitstatus == 1
+"
 
-  cmd = "heroku certs:add #{cert_nopass_chained_filepath} #{private_key_nopass_filepath} --app #{app_name}"
+  continue_prompt
+
+
+  cmd = "heroku certs:add #{cert_chained_filepath} #{private_key_filepath} --app #{app_name}"
 
 puts "
 Please ensure that you have a Custom Domain for #{@common_name} setup on your Heroku app before continuing.
@@ -358,11 +348,17 @@ when 'create'
   create
 when 'unpack_namecheap'
   unpack_namecheap
-when 'remove_passphrases'
-  remove_passphrases
 when 'heroku_wizard'
-  remove_passphrases
   append_chain
+  check_chain
+  puts "
+-----------------------------------------------------------------
+Does the above output look correct? It's important to check this!
+You will thank me in the long run :)
+-----------------------------------------------------------------
+
+"
+  continue_prompt
   upload_to_heroku
 when 'append_chain'
   append_chain
